@@ -3,12 +3,16 @@ from rdkit import DataStructs
 from rdkit.Chem import AllChem
 import requests as rq
 from contextlib import closing
+import pubchempy as pcp
 
 """
     for each chemical in the unknowns, calculate the minimum nearest neighbor distance
     between it and the chemicals in the known.  If they're not in the response already, NN will give
     inchikeys.
 """
+
+#TODO Develop an alternate workflow for finding SMILES when MolePro may fail to find them.
+#Perhaps use Chemical Identifier resolver (CIR) to solve this. (https://cactus.nci.nih.gov/chemical/structure)
 
 # First, get INCHI keys from node normalizer.
 def getNodeNormINCHIKEYS(curie_ids):
@@ -57,6 +61,18 @@ def getMoleProINCHIKEYtoSMILES(all_chemical_curies):
                         i+=1
 
     return all_chemical_curies
+
+import pubchempy as pcp
+
+#Backup function to retrieve SMILES from a PUBCHEM.COMPOUND curie in the eq. identifiers field.
+def getPubChemSMILES(pubchem_id):
+    pubchem_id = pubchem_id.replace("PUBCHEM.COMPOUND:","")
+    try:
+        compound = pcp.get_compounds(pubchem_id)[0]
+        return compound.canonical_smiles
+    except (IndexError, pcp.PubChemHTTPError) as e:
+        print(f"Error retrieving SMILES for PubChem ID {pubchem_id}: {e}")
+        return None
 
 # To use this function, you need to provide the following parameters:
 
@@ -118,8 +134,19 @@ print(inchikey_dict)
 smiles_dict = getMoleProINCHIKEYtoSMILES(inchikey_dict)
 print(smiles_dict)
 
+for compound in smiles_dict.keys():
+    check_smiles = smiles_dict[compound]
+    if check_smiles == 'No SMILES could be found':
+        if "PUBCHEM.COMPOUND:" in compound:
+            try:
+                pubchem_smiles = getPubChemSMILES(compound)
+                smiles_dict[compound] = pubchem_smiles
+            except:
+                continue
+
+
 unknown_smiles_dict = {key:smiles_dict[key] for key in unknown_curies}
 known_smiles_dict = {key:smiles_dict[key] for key in known_curies}
-nearest_neighbors = find_nearest_neighbors(unknown_smiles_dict, known_smiles_dict, 0, 2)
+nearest_neighbors = find_nearest_neighbors(unknown_smiles_dict, known_smiles_dict, 0, 3)
 print(nearest_neighbors) #Should show that theobromine (5429) is most similar to caffeine.
 
