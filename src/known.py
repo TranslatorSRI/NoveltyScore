@@ -14,17 +14,22 @@ def find_known_results(response):
             if nb_key not in pinned_node_ids:
                 for nb in result["node_bindings"][nb_key]:
                     unknown_result_ids.add(nb["id"])
-        for analysis in result["analyses"]:
-            for eb in analysis["edge_bindings"].values():
-                edge_id = eb["id"]
-                edge = knowledge_graph["edges"][edge_id]
-                for source in edge["sources"]:
-                    if source["resource_role"] == "primary_knowledge_source":
-                        if source["resource_id"] not in inferring_sources:
-                            for nb_key in result["node_bindings"]:
-                                if nb_key not in pinned_node_ids:
-                                    for nb in result["node_bindings"][nb_key]:
-                                        known_result_ids.add(nb["id"])
-                                        unknown_result_ids.remove(nb["id"])
+        is_result_known(known_result_ids, unknown_result_ids, knowledge_graph, result, pinned_node_ids, inferring_sources)
+
     #do stuff
     return known_result_ids, unknown_result_ids
+
+def is_result_known(known_result_ids, unknown_result_ids, knowledge_graph, result, pinned_node_ids, inferring_sources):
+    for analysis in result["analyses"]:
+        for eb in analysis["edge_bindings"].values():
+            edge_id = eb["id"]
+            edge = knowledge_graph["edges"][edge_id]
+            for source in edge["sources"]:
+                if source["resource_role"] == "primary_knowledge_source":
+                    if source["resource_id"] not in inferring_sources:
+                        for nb_key in result["node_bindings"]:
+                            if nb_key not in pinned_node_ids:
+                                for nb in result["node_bindings"][nb_key]:
+                                    known_result_ids.add(nb["id"])
+                                    unknown_result_ids.remove(nb["id"])
+                                return
