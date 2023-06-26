@@ -1,4 +1,5 @@
 def find_known_results(response):
+    # populate with all inferring sources infores ids
     inferring_sources = []
     known_result_ids = set()
     unknown_result_ids = set()
