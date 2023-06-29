@@ -12,7 +12,7 @@ def run_score(pk):
     results = retrieve_ars_results(pk)
     for ars, response in results.items():
         known, unknown = find_known_results(response)
-        nn_distance = calculate_nn_distance(known, unknown, minimum_similarity, num_neighbors)
+        nn_distance = calculate_nn_distance(known, unknown, minimum_similarity=0.5, num_neighbors=1) #similarity and num neighbors filters could be changed.
         recency = calculate_recency(known, response)
         novelty_scores = calculate_novelty_score(known, unknown, nn_distance, recency, response)
 
