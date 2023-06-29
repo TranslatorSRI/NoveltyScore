@@ -124,29 +124,28 @@ def find_nearest_neighbors(unknown_smiles_dict, known_smiles_dict, similarity_cu
         nearest_neighbor_mapping.update({unknownkey:neighbors})
     return nearest_neighbor_mapping
 
+def calculate_nn_distance(knowns,unknowns,minimum_similarity,num_neighbors):
+    all_ids = knowns + unknowns
+    inchikey_dict = getNodeNormINCHIKEYS(all_ids)
+    smiles_dict = getMoleProINCHIKEYtoSMILES(inchikey_dict)
+    for compound in smiles_dict.keys():
+        check_smiles = smiles_dict[compound]
+        if check_smiles == 'No SMILES could be found':
+            if "PUBCHEM.COMPOUND:" in compound:
+                try:
+                    pubchem_smiles = getPubChemSMILES(compound)
+                    smiles_dict[compound] = pubchem_smiles
+                except:
+                    continue
+    unknown_smiles_dict = {key:smiles_dict[key] for key in unknowns}
+    known_smiles_dict = {key:smiles_dict[key] for key in knowns}
+    nearest_neighbors = find_nearest_neighbors(unknown_smiles_dict, known_smiles_dict, minimum_similarity, num_neighbors)
+    return nearest_neighbors
+
+"""
 # Here's an example usage of these functions:
 unknown_curies = ["PUBCHEM.COMPOUND:2519"] #Caffeine
-known_curies = ["PUBCHEM.COMPOUND:2244","PUBCHEM.COMPOUND:3032732","PUBCHEM.COMPOUND:5429"] #3032732 should fail, as an example
-curie_ids = unknown_curies + known_curies
-inchikey_dict = getNodeNormINCHIKEYS(curie_ids)
-print(inchikey_dict)
-
-smiles_dict = getMoleProINCHIKEYtoSMILES(inchikey_dict)
-print(smiles_dict)
-
-for compound in smiles_dict.keys():
-    check_smiles = smiles_dict[compound]
-    if check_smiles == 'No SMILES could be found':
-        if "PUBCHEM.COMPOUND:" in compound:
-            try:
-                pubchem_smiles = getPubChemSMILES(compound)
-                smiles_dict[compound] = pubchem_smiles
-            except:
-                continue
-
-
-unknown_smiles_dict = {key:smiles_dict[key] for key in unknown_curies}
-known_smiles_dict = {key:smiles_dict[key] for key in known_curies}
-nearest_neighbors = find_nearest_neighbors(unknown_smiles_dict, known_smiles_dict, 0, 3)
+known_curies = ["PUBCHEM.COMPOUND:2244","PUBCHEM.COMPOUND:3032732","PUBCHEM.COMPOUND:5429"] #3032732 should fail on MolePro, but not PubChem.
+nearest_neighbors = calculate_nn_distance(known_curies,unknown_curies,0,3) # 0 minimum similarity (capture all similarities) and give 3 nearest neighbors
 print(nearest_neighbors) #Should show that theobromine (5429) is most similar to caffeine.
-
+"""
