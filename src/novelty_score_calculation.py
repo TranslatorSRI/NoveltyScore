@@ -17,6 +17,19 @@ The steps for the ideal workflow are as follows:
 The end result of this script displays a table with values from different columns and accordingly lists the novelty score as well.
 """
 
+def get_publication_info(pub_id):
+    """
+    Args: PMID
+    Returns: The publication info
+    """
+    base_url = "https://3md2qwxrrk.us-east-1.awsapprunner.com/publications?pubids="
+    request_id = '1df88223-c0f8-47f5-a1f3-661b944c7849'
+    full_url = f"{base_url}{pub_id}&request_id={request_id}"
+    response = requests.get(full_url)
+    response = response.json()
+    return response
+
+
 def sigmoid(x):
     return 1 / (1 + np.exp(x))
 
@@ -206,15 +219,12 @@ def extracting_drug_fda_publ_date(response):
                             pub = []
                             for i in range(len(edge_attribute['attributes'])):
                                 att_type_id[i] = edge_attribute['attributes'][i]['attribute_type_id']
-                            # print(att_type_id)
 
                             for key in att_type_id.keys():
                                 if att_type_id[key] in attribute_type_id_list_fda:
                                     fda.append(key)
                                 elif att_type_id[key] in attribute_type_id_list_pub:
                                     pub.append(key)
-                            # print(fda)
-                            # print(pub)
 
                             if len(fda) > 0:
                                 if edge_attribute['attributes'][fda[0]]['value'] == 'FDA Approval':
@@ -227,41 +237,33 @@ def extracting_drug_fda_publ_date(response):
                             # Publication
                             if len(pub) > 0:
                                 publications = edge_attribute['attributes'][pub[0]]['value']
+                                if '|' in publications:
+                                    publications = publications.split('|')
+                                if type(publications) == 'str':
+                                    publications = [publications]
+
+                                # Removal of all publication entries that are links
+                                publications = [x for x in publications if "http" not in x]
+                                # Removal of all publication entries that are Clinical Trials
+                                publications = [x for x in publications if "clinicaltrials" not in x]
                                 number_of_publ = len(publications)
-                                publications = tuple(publications)
-                                ## Extracting the year of publishing of each PMID or PMC_ID
-                                if len(publications) > 0:
-                                    year_published = []
-                                    for publ in publications:
-                                        if 'PMID' in publ:
-                                            year = get_publication_year_pmid(publ[5:])
-                                            year_published.append(year)
-                                        elif 'PMC' in publ:
-                                            year = get_publication_year_pmc(publ)
-                                            year_published.append(year)
-                                        else:
-                                            age_oldest = np.nan
 
-                                    Years = [int(year) for year in year_published if year and str(year).isdigit()]
-                                    if len(Years) > 0:
-                                        age_oldest = today.year - min(Years)
-                                        # drug_idx_fda_status.append(
-                                        #     (edge, drug_idx, fda_status, publications, number_of_publ, age_oldest))
-
-                                    else:
+                                if len(publications)>0:
+                                    # print(publications)
+                                    publications_1 = ','.join(publications)
+                                    response_pub = get_publication_info(publications_1)
+                                    if response_pub['_meta']['n_results']==0:
                                         age_oldest = np.nan
-                                    # print(age_oldest)
-                                else:
-                                    age_oldest = np.nan
-                                # drug_idx_fda_status.append(
-                                #     (edge, drug_idx, fda_status, publications, number_of_publ, age_oldest))
-
+                                    else:
+                                        publ_year = []
+                                        for key in response_pub['results'].keys():
+                                            if 'not_found' not in key:
+                                                publ_year.extend([int(response_pub['results'][key]['pub_year'])])
+                                        age_oldest = today.year - min(publ_year)
                             else:
                                 publications = None
                                 number_of_publ = 0.0
                                 age_oldest = np.nan
-                                # drug_idx_fda_status.append(
-                                #     (edge, drug_idx, fda_status, publications, number_of_publ, age_oldest))
                         drug_idx_fda_status.append((idi, drug_idx, fda_status, publications, number_of_publ, age_oldest))
                 else:
                     if query_unknown in ['biolink:Gene', 'biolink:Protein']:
@@ -387,7 +389,7 @@ def compute_novelty(response):
             # print(df.head())
             # print(query_chk)
 
-            df.to_excel(f'DATAFRAME_{i}.xlsx', header=False, index=False)
+            df.to_excel(f'DATAFRAME.xlsx', header=False, index=False)
             # df = pd.read_excel('DATAFRAME.xlsx', names=['edge', 'drug', 'fda status', 'publications', 'number_of_publ', 'age_oldest_pub'])
             # query_chk = 1
 
@@ -415,23 +417,25 @@ def compute_novelty(response):
                 # # Step 5:
                 # # Calculating the novelty score:
                 df['novelty_score'] = df.apply(lambda row: novelty_score(row['fda status'], row['recency'], row['similarity']), axis=1)
-                df_res.to_excel(f'DATAFRAME_result_{i}.xlsx', header=False, index=False)
+                df_res.to_excel(f'DATAFRAME_result.xlsx', header=False, index=False)
 
                 # # # Step 6
                 # # # Just sort them:
                 df = df[['drug', 'novelty_score']].sort_values(by= 'novelty_score', ascending= False)
             else:
                 df = df.assign(novelty_score=0)
-            df.to_excel(f'DATAFRAME_NOVELTY_{i}.xlsx', header=False, index=False)
+            df.to_excel(f'DATAFRAME_NOVELTY.xlsx', header=False, index=False)
         else:
             df = pd.DataFrame()
     else:
         df = pd.DataFrame()
     return df
 
-for i in list(range(1, 10)):
-    temp = compute_novelty(f'dictionary_{i}.json')
-    if temp.empty:
-        print(f"No Results in dictionary_{i}.json")
-    else:
-        temp_json = temp.to_json(f'NoveltyScore_{i}.json', orient='index')
+# for i in list(range(2, 10)):
+#     temp = compute_novelty(f'dictionary_{i}.json')
+#     if temp.empty:
+#         print(f"No Results in dictionary_{i}.json")
+#     else:
+#         temp_json = temp.to_json(f'NoveltyScore_{i}.json', orient='index')
+
+# temp = compute_novelty('mergedAnnotatedOutput_0.json')
