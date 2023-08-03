@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import pandas as pd
 from datetime import date
 import json
@@ -9,7 +7,7 @@ import numpy as np
 from known import find_known_results
 from extr_smile_molpro_by_id import  mol_to_smile_molpro
 from mol_similarity import find_nearest_neighbors
-import urllib
+import time
 
 """
 This script computes the novelty score for a list of results obtained for a 1-H response.
@@ -27,20 +25,22 @@ def molecular_sim(known, unknown, response):
     known_ids = []
     if len(unknown) > 0:
         for drug in unknown:
-            edge_attribute_sn = response['fields']['data']['message']['results'][drug]['node_bindings']['sn'][0]['id']
+            s = list(response['fields']['data']['message']['results'][drug]['node_bindings'].keys())
+            edge_attribute_sn = response['fields']['data']['message']['results'][drug]['node_bindings'][s[0]][0]['id']
             if 'PUBCHEM' in edge_attribute_sn or 'CHEMBL' in edge_attribute_sn or 'UNII' in edge_attribute_sn or 'RXNORM' in edge_attribute_sn or 'UMLS' in edge_attribute_sn or not 'MONDO' in edge_attribute_sn:
                 unknown_ids.append(edge_attribute_sn)
             else:
                 unknown_ids.append(
-                    response['fields']['data']['message']['results'][drug]['node_bindings']['on'][0]['id'])
+                    response['fields']['data']['message']['results'][drug]['node_bindings'][s[1]][0]['id'])
 
     if len(known) > 0:
         for drug in known:
-            edge_attribute_sn = response['fields']['data']['message']['results'][drug]['node_bindings']['sn'][0]['id']
+            s = list(response['fields']['data']['message']['results'][drug]['node_bindings'].keys())
+            edge_attribute_sn = response['fields']['data']['message']['results'][drug]['node_bindings'][s[0]][0]['id']
             if 'PUBCHEM' in edge_attribute_sn or 'CHEMBL' in edge_attribute_sn or 'UMLS' in edge_attribute_sn or 'UNII' in edge_attribute_sn or 'RXNORM' in edge_attribute_sn or not 'MONDO' in edge_attribute_sn:
                 known_ids.append(edge_attribute_sn)
             else:
-                known_ids.append(response['fields']['data']['message']['results'][drug]['node_bindings']['on'][0]['id'])
+                known_ids.append(response['fields']['data']['message']['results'][drug]['node_bindings'][s[1]][0]['id'])
 
     smile_unkown = mol_to_smile_molpro(unknown_ids)
     smile_known = mol_to_smile_molpro(known_ids)
@@ -204,7 +204,7 @@ def get_publication_year_pmc(pmc_id):
     return extract_year_pmc(response)
 
 
-def extracting_drug_fda_publ_date(response):
+def extracting_drug_fda_publ_date(response, unknown):
     """
     Upon querying, the response is returned as a list containing 10 dictionaries,
     with each dictionary representing the response from an ARA. The function 'extracting_drug_fda_publ_date'
@@ -232,87 +232,93 @@ def extracting_drug_fda_publ_date(response):
             res_chk = 1
             # for edge in response['fields']['data']['message']['knowledge_graph']['edges'].keys():
             query_known, query_unknown, query_chk = query_id(response)
-            edge_list = list(response['fields']['data']['message']['knowledge_graph']['edges'].keys())
-            for idx, idi in enumerate(edge_list):
-                if idx % 20 == 0:
-                    print(f'progressing {idx}')
-                edge = edge_list[idx]
-                edge_attribute = response['fields']['data']['message']['knowledge_graph']['edges'][edge]
-                # if set(['subject', 'object']).issubset(edge_attribute.keys()):
-                if query_chk==1:
-                    if 'PUBCHEM' in edge_attribute['subject'] or 'CHEMBL' in edge_attribute['subject'] or 'UNII' in edge_attribute['subject'] or 'RXNORM' in edge_attribute['subject'] or 'UMLS' in edge_attribute['subject'] or not 'MONDO' in edge_attribute['subject']:
-                        drug_idx = edge_attribute['subject']
-                    else:
-                        drug_idx = edge_attribute['object']
-                    if set(['attributes']).issubset(edge_attribute.keys()):
-                        if len(edge_attribute['attributes']) > 0:
-                            att_type_id = {}
-                            fda = []
-                            pub = []
-                            for i in range(len(edge_attribute['attributes'])):
-                                att_type_id[i] = edge_attribute['attributes'][i]['attribute_type_id']
+            idi=-1
+            for tmp in unknown:
+                tmp_res = response['fields']['data']['message']['results'][tmp]['analyses'][0]['edge_bindings']
+                for tmp_1 in tmp_res:
+                    idi+=1
+                    edge = response['fields']['data']['message']['results'][tmp]['analyses'][0]['edge_bindings'][tmp_1][0]['id']
+            # edge_list = list(response['fields']['data']['message']['knowledge_graph']['edges'].keys())
+            # for idx, idi in enumerate(edge_list):
+            #     if idx % 20 == 0:
+            #         print(f'progressing {idx}')
+                # edge = edge_list[idx]
+                    edge_attribute = response['fields']['data']['message']['knowledge_graph']['edges'][edge]
+                    # if set(['subject', 'object']).issubset(edge_attribute.keys()):
+                    if query_chk==1:
+                        if 'PUBCHEM' in edge_attribute['subject'] or 'CHEMBL' in edge_attribute['subject'] or 'UNII' in edge_attribute['subject'] or 'RXNORM' in edge_attribute['subject'] or 'UMLS' in edge_attribute['subject'] or not 'MONDO' in edge_attribute['subject']:
+                            drug_idx = edge_attribute['subject']
+                        else:
+                            drug_idx = edge_attribute['object']
+                        if set(['attributes']).issubset(edge_attribute.keys()):
+                            if len(edge_attribute['attributes']) > 0:
+                                att_type_id = {}
+                                fda = []
+                                pub = []
+                                for i in range(len(edge_attribute['attributes'])):
+                                    att_type_id[i] = edge_attribute['attributes'][i]['attribute_type_id']
 
-                            for key in att_type_id.keys():
-                                if att_type_id[key] in attribute_type_id_list_fda:
-                                    fda.append(key)
-                                elif att_type_id[key] in attribute_type_id_list_pub:
-                                    pub.append(key)
+                                for key in att_type_id.keys():
+                                    if att_type_id[key] in attribute_type_id_list_fda:
+                                        fda.append(key)
+                                    elif att_type_id[key] in attribute_type_id_list_pub:
+                                        pub.append(key)
 
-                            if len(fda) > 0:
-                                if edge_attribute['attributes'][fda[0]]['value'] == 'FDA Approval':
-                                    fda_status = 0.0
+                                if len(fda) > 0:
+                                    if edge_attribute['attributes'][fda[0]]['value'] == 'FDA Approval':
+                                        fda_status = 0.0
+                                    else:
+                                        fda_status = 1.0
                                 else:
-                                    fda_status = 1.0
-                            else:
-                                fda_status = None
+                                    fda_status = None
 
-                            # Publication
-                            if len(pub) > 0:
-                                publications = edge_attribute['attributes'][pub[0]]['value']
-                                if '|' in publications:
-                                    publications = publications.split('|')
-                                if type(publications) == 'str':
-                                    publications = [publications]
+                                # Publication
+                                if len(pub) > 0:
+                                    publications = edge_attribute['attributes'][pub[0]]['value']
+                                    if '|' in publications:
+                                        publications = publications.split('|')
+                                    if type(publications) == 'str':
+                                        publications = [publications]
 
-                                # Removal of all publication entries that are links
-                                publications = [x for x in publications if "http" not in x]
-                                # Removal of all publication entries that are Clinical Trials
-                                publications = [x for x in publications if "clinicaltrials" not in x]
-                                number_of_publ = len(publications)
+                                    # Removal of all publication entries that are links
+                                    publications = [x for x in publications if "http" not in x]
+                                    # Removal of all publication entries that are Clinical Trials
+                                    publications = [x for x in publications if "clinicaltrials" not in x]
+                                    number_of_publ = len(publications)
 
-                                if len(publications)>0:
-                                    # print(publications)
-                                    publications_1 = ','.join(publications)
-                                    try:
-                                        response_pub = get_publication_info(publications_1)
-                                        if response_pub['_meta']['n_results']==0:
+                                    if len(publications)>0:
+                                        # print(publications)
+                                        publications_1 = ','.join(publications)
+                                        try:
+                                            response_pub = get_publication_info(publications_1)
+                                            if response_pub['_meta']['n_results']==0:
+                                                age_oldest = np.nan
+                                            else:
+                                                publ_year = []
+                                                for key in response_pub['results'].keys():
+                                                    if 'not_found' not in key:
+                                                        publ_year.extend([int(response_pub['results'][key]['pub_year'])])
+                                                age_oldest = today.year - min(publ_year)
+                                        except ConnectionError as e:
                                             age_oldest = np.nan
-                                        else:
-                                            publ_year = []
-                                            for key in response_pub['results'].keys():
-                                                if 'not_found' not in key:
-                                                    publ_year.extend([int(response_pub['results'][key]['pub_year'])])
-                                            age_oldest = today.year - min(publ_year)
-                                    except ConnectionError as e:
-                                        age_oldest = np.nan
+                                else:
+                                    publications = None
+                                    number_of_publ = 0.0
+                                    age_oldest = np.nan
+                            drug_idx_fda_status.append((idi, drug_idx, fda_status, publications, number_of_publ, age_oldest))
+                    else:
+                        if query_unknown in ['biolink:Gene', 'biolink:Protein']:
+                            if 'NCBI' in edge_attribute['subject'] or 'GO' in edge_attribute['subject']:
+                                gene_idx = edge_attribute['subject']
                             else:
-                                publications = None
-                                number_of_publ = 0.0
-                                age_oldest = np.nan
-                        drug_idx_fda_status.append((idi, drug_idx, fda_status, publications, number_of_publ, age_oldest))
-                else:
-                    if query_unknown in ['biolink:Gene', 'biolink:Protein']:
-                        if 'NCBI' in edge_attribute['subject'] or 'GO' in edge_attribute['subject']:
-                            gene_idx = edge_attribute['subject']
-                        else:
-                            gene_idx = edge_attribute['object']
-                        drug_idx_fda_status.append((idi, gene_idx))
-                    elif query_unknown in ['biolink:Disease', 'biolink:Phenotype']:
-                        if 'MONDO' in edge_attribute['subject']:
-                            dis_idx = edge_attribute['subject']
-                        else:
-                            dis_idx = edge_attribute['object']
-                        drug_idx_fda_status.append((idi, dis_idx))
+                                gene_idx = edge_attribute['object']
+                            drug_idx_fda_status.append((idi, gene_idx))
+                        elif query_unknown in ['biolink:Disease', 'biolink:Phenotype']:
+                            if 'MONDO' in edge_attribute['subject']:
+                                dis_idx = edge_attribute['subject']
+                            else:
+                                dis_idx = edge_attribute['object']
+                            drug_idx_fda_status.append((idi, dis_idx))
         else:
             res_chk = 0
             query_chk = 0
@@ -419,23 +425,23 @@ def compute_novelty(response):
             # # Step 2
             similarity_map = molecular_sim(known, unknown, mergedAnnotatedOutput)
 
-            df, query_chk = extracting_drug_fda_publ_date(mergedAnnotatedOutput)
+            df, query_chk = extracting_drug_fda_publ_date(mergedAnnotatedOutput, unknown)
     #         # print(df.head())
     #         # print(query_chk)
     #
-            # df.to_excel(f'DATAFRAME.xlsx', header=False, index=False)
+            df.to_excel(f'DATAFRAME.xlsx', header=False, index=False)
             # df = pd.read_excel('DATAFRAME.xlsx', names=['edge', 'drug', 'fda status', 'publications', 'number_of_publ', 'age_oldest_pub'])
             # query_chk = 1
 
             # #
-            res, res_known = extract_results(mergedAnnotatedOutput, unknown, known)
+            # res, res_known = extract_results(mergedAnnotatedOutput, unknown, known)
     #         # print(len(res_known))
     #         # print(len(res))
     #         # # #
-            df_res, res_unknown, res_known = result_edge_correlation(res, res_known, df)
+    #         df_res, res_unknown, res_known = result_edge_correlation(res, res_known, df)
             # print(len(res_unknown))
             # print(len(res_known))
-            df = df_res
+            # df = df_res
             # print(df.head())
             # print(similarity_map)
             if query_chk==1:
@@ -453,29 +459,25 @@ def compute_novelty(response):
                 # # Step 5:
                 # # Calculating the novelty score:
                 df['novelty_score'] = df.apply(lambda row: novelty_score(row['fda status'], row['recency'], row['similarity']), axis=1)
-                # df_res.to_excel(f'DATAFRAME_result.xlsx', header=False, index=False)
+                df.to_excel(f'DATAFRAME_result.xlsx', header=False, index=False)
 
                 # # # Step 6
                 # # # Just sort them:
                 df = df[['drug', 'novelty_score']].sort_values(by= 'novelty_score', ascending= False)
             else:
                 df = df.assign(novelty_score=0)
-            # df.to_excel(f'DATAFRAME_NOVELTY.xlsx', header=False, index=False)
+            df.to_excel(f'DATAFRAME_NOVELTY.xlsx', header=False, index=False)
         else:
             df = pd.DataFrame()
     else:
         df = pd.DataFrame()
     return df
 
-# for i in list(range(1, 5)):
-#     temp = compute_novelty(f'dictionary_{i}.json')
-#     if temp.empty:
-#         print(f"No Results in dictionary_{i}.json")
-#     else:
-#         temp_json = temp.to_json(f'NoveltyScore_{i}.json', orient='values')
-
-temp = compute_novelty('dictionary_1.json')
+#for i in list(range(1, 5)):
+start = time.time()
+temp = compute_novelty('mergedAnnotatedOutput.json')
 if temp.empty:
-    print(f"No Results in dictionary_1.json")
+    print(f"No Results in mergedAnnotatedOutput.json")
 else:
-    temp_json = temp.to_json(f'NoveltyScore_1.json', orient='values')
+    temp_json = temp.to_json(f'mergedAnnotatedOutput_scores.json', orient='values')
+print(time.time()-start)
