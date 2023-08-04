@@ -423,13 +423,15 @@ def compute_novelty(response):
             known, unknown = find_known_results(mergedAnnotatedOutput)
             #
             # # Step 2
-            similarity_map = molecular_sim(known, unknown, mergedAnnotatedOutput)
 
+
+            #start = time.time()
             df, query_chk = extracting_drug_fda_publ_date(mergedAnnotatedOutput, unknown)
+            #print(f"Time to extract fda status and Publication data:{time.time()-start}")
     #         # print(df.head())
     #         # print(query_chk)
     #
-            df.to_excel(f'DATAFRAME.xlsx', header=False, index=False)
+            # df.to_excel(f'DATAFRAME.xlsx', header=False, index=False)
             # df = pd.read_excel('DATAFRAME.xlsx', names=['edge', 'drug', 'fda status', 'publications', 'number_of_publ', 'age_oldest_pub'])
             # query_chk = 1
 
@@ -445,39 +447,45 @@ def compute_novelty(response):
             # print(df.head())
             # print(similarity_map)
             if query_chk==1:
+                #start = time.time()
+                try:
+                    similarity_map = molecular_sim(known, unknown, mergedAnnotatedOutput)
+                    df['similarity'] = df.apply(lambda row: similarity_map[row['drug']][0][1] if row['drug'] in similarity_map.keys() else np.nan,axis=1)
+                except Exception as e:
+                    df = df.assign(similarity=np.nan)
+
+                #print(f"Time to compute Molecular Similarity:{time.time() - start}")
                 # Step 3:
                 # calculating the recency
                 df['recency'] = df.apply(lambda row: recency_function_exp(row['number_of_publ'], row['age_oldest_pub'], 100, 50) if not (np.isnan(row['number_of_publ']) or np.isnan(row['age_oldest_pub'])) else np.nan, axis=1)
                 #
                 # # Step 4:
-                # # This section will be added later. Currently just putting 'NaN':
+                # # Calculating the Similarity:
                 # nearest_neighbours = calculate_nn_distance(res_known, res_unknown, 0, 1)
 
-                df['similarity'] = df.apply(lambda row: similarity_map[row['drug']][0][1] if row['drug'] in similarity_map.keys() else np.nan, axis=1)
                 # df = df.assign(similarity=np.nan)
 
                 # # Step 5:
                 # # Calculating the novelty score:
                 df['novelty_score'] = df.apply(lambda row: novelty_score(row['fda status'], row['recency'], row['similarity']), axis=1)
-                df.to_excel(f'DATAFRAME_result.xlsx', header=False, index=False)
+                # df.to_excel(f'DATAFRAME_result.xlsx', header=False, index=False)
 
                 # # # Step 6
                 # # # Just sort them:
                 df = df[['drug', 'novelty_score']].sort_values(by= 'novelty_score', ascending= False)
             else:
                 df = df.assign(novelty_score=0)
-            df.to_excel(f'DATAFRAME_NOVELTY.xlsx', header=False, index=False)
+            # df.to_excel(f'DATAFRAME_NOVELTY.xlsx', header=False, index=False)
         else:
             df = pd.DataFrame()
     else:
         df = pd.DataFrame()
     return df
 
-#for i in list(range(1, 5)):
 start = time.time()
-temp = compute_novelty('mergedAnnotatedOutput.json')
+temp = compute_novelty(f'mergedAnnotatedOutput.json')
 if temp.empty:
-    print(f"No Results in mergedAnnotatedOutput.json")
+    print(f"No results for mergedAnnotatedOutput.json")
 else:
     temp_json = temp.to_json(f'mergedAnnotatedOutput_scores.json', orient='values')
-print(time.time()-start)
+print(f"Total time: {time.time()-start}")

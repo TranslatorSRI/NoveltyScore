@@ -7,6 +7,7 @@ import requests
 from contextlib import closing
 from known import find_known_results
 import json
+import orjson
 import pandas as pd
 from collections import Counter
 import time
@@ -24,7 +25,7 @@ def mol_to_smile_molpro(molecules):
         Example: Attached sample_mols.json file 
     """
     
-    url = "https://translator.broadinstitute.org/molecular_data_provider/compound/by_id"
+    url = "https://molepro.transltr.io/molecular_data_provider/compound/by_id"
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json"
