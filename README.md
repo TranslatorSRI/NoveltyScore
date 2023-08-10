@@ -1,4 +1,4 @@
-# NoveltyScore
+# Novelty Score
 # Description
 
 This code computes the novelty score for the results obtained for a 1 hop response. This is computed inside the [SRI answer appraiser](https://github.com/NCATSTranslator/Translator-All/wiki/Standards-and-Reference-Implementation-(SRI)-Team).
